@@ -1,0 +1,26 @@
+# Python virtual environment
+.venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Environment variables and secrets
+.env
+
+# Testing and coverage output
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Large local datasets
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Logs and editor files
+*.log
+.vscode/
+.DS_Store
+Thumbs.db
