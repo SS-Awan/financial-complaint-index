@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -29,6 +30,7 @@ def root():
     return {
         "message": "Financial Complaint Index API",
         "documentation": "/docs",
+        "web_app": "/app",
     }
 
 
@@ -50,9 +52,17 @@ def health():
             status_code=503,
             detail="Database connection failed.",
         ) from error
+
+
 @app.get("/search")
-def search(query: str, limit: int = 5):
-    if not query.strip():
+def search_complaints(
+    query: str,
+    limit: int = 5,
+    state: str | None = None,
+):
+    query = query.strip()
+
+    if not query:
         raise HTTPException(
             status_code=400,
             detail="Search query cannot be empty.",
@@ -64,65 +74,83 @@ def search(query: str, limit: int = 5):
             detail="Limit must be between 1 and 20.",
         )
 
+    where_clauses = [
+        "search_vector @@ websearch_to_tsquery('english', %s)",
+    ]
+    filter_values = [query]
+
+    if state:
+        where_clauses.append("state = %s")
+        filter_values.append(state.strip().upper())
+
+    where_sql = " AND ".join(where_clauses)
+
+    sql = f"""
+        SELECT
+            complaint_id,
+            company,
+            product,
+            state,
+            date_received,
+            ts_headline(
+                'english',
+                consumer_complaint_narrative,
+                websearch_to_tsquery('english', %s),
+                'StartSel=[, StopSel=], MaxWords=25, MinWords=10'
+            ) AS excerpt,
+            ts_rank(
+                search_vector,
+                websearch_to_tsquery('english', %s)
+            ) AS rank
+        FROM complaints
+        WHERE {where_sql}
+        ORDER BY rank DESC
+        LIMIT %s
+    """
+
+    parameters = [query, query, *filter_values, limit]
+
     try:
         with psycopg.connect(**connection_settings) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT
-                        complaint_id,
-                        company,
-                        product,
-                        state,
-                        date_received,
-                        ts_headline(
-                            'english',
-                            consumer_complaint_narrative,
-                            websearch_to_tsquery('english', %s),
-                            'StartSel=[, StopSel=], MaxWords=25, MinWords=10'
-                        ) AS excerpt,
-                        ts_rank(
-                            search_vector,
-                            websearch_to_tsquery('english', %s)
-                        ) AS rank
-                    FROM complaints
-                    WHERE search_vector @@ websearch_to_tsquery('english', %s)
-                    ORDER BY rank DESC, date_received DESC
-                    LIMIT %s
-                    """,
-                    (query, query, query, limit),
-                )
+                cursor.execute(sql, parameters)
                 rows = cursor.fetchall()
+
+        results = [
+            {
+                "complaint_id": complaint_id,
+                "company": company,
+                "product": product,
+                "state": complaint_state,
+                "date_received": (
+                    date_received.isoformat() if date_received else None
+                ),
+                "excerpt": excerpt,
+                "rank": float(rank),
+            }
+            for (
+                complaint_id,
+                company,
+                product,
+                complaint_state,
+                date_received,
+                excerpt,
+                rank,
+            ) in rows
+        ]
 
         return {
             "query": query,
-            "result_count": len(rows),
-            "results": [
-                {
-                    "complaint_id": complaint_id,
-                    "company": company,
-                    "product": product,
-                    "state": state,
-                    "date_received": date_received.isoformat(),
-                    "rank": round(float(rank), 3),
-                    "excerpt": excerpt,
-                }
-                for (
-                    complaint_id,
-                    company,
-                    product,
-                    state,
-                    date_received,
-                    excerpt,
-                    rank,
-                ) in rows
-            ],
+            "state": state.strip().upper() if state else None,
+            "result_count": len(results),
+            "results": results,
         }
     except psycopg.Error as error:
         raise HTTPException(
             status_code=503,
             detail="Database query failed.",
         ) from error
+
 
 @app.get("/app", include_in_schema=False)
 def web_app():
