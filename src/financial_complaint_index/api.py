@@ -49,4 +49,76 @@ def health():
             status_code=503,
             detail="Database connection failed.",
         ) from error
-    
+@app.get("/search")
+def search(query: str, limit: int = 5):
+    if not query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty.",
+        )
+
+    if not 1 <= limit <= 20:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit must be between 1 and 20.",
+        )
+
+    try:
+        with psycopg.connect(**connection_settings) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        complaint_id,
+                        company,
+                        product,
+                        state,
+                        date_received,
+                        ts_headline(
+                            'english',
+                            consumer_complaint_narrative,
+                            websearch_to_tsquery('english', %s),
+                            'StartSel=[, StopSel=], MaxWords=25, MinWords=10'
+                        ) AS excerpt,
+                        ts_rank(
+                            search_vector,
+                            websearch_to_tsquery('english', %s)
+                        ) AS rank
+                    FROM complaints
+                    WHERE search_vector @@ websearch_to_tsquery('english', %s)
+                    ORDER BY rank DESC, date_received DESC
+                    LIMIT %s
+                    """,
+                    (query, query, query, limit),
+                )
+                rows = cursor.fetchall()
+
+        return {
+            "query": query,
+            "result_count": len(rows),
+            "results": [
+                {
+                    "complaint_id": complaint_id,
+                    "company": company,
+                    "product": product,
+                    "state": state,
+                    "date_received": date_received.isoformat(),
+                    "rank": round(float(rank), 3),
+                    "excerpt": excerpt,
+                }
+                for (
+                    complaint_id,
+                    company,
+                    product,
+                    state,
+                    date_received,
+                    excerpt,
+                    rank,
+                ) in rows
+            ],
+        }
+    except psycopg.Error as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Database query failed.",
+        ) from error
