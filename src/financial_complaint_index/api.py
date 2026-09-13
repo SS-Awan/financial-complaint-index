@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from pathlib import Path
 
 import psycopg
@@ -60,6 +61,9 @@ def search_complaints(
     limit: int = 5,
     state: str | None = None,
     product: str | None = None,
+    company: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
     query = query.strip()
 
@@ -75,6 +79,12 @@ def search_complaints(
             detail="Limit must be between 1 and 20.",
         )
 
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Start date cannot be after end date.",
+        )
+
     where_clauses = [
         "search_vector @@ websearch_to_tsquery('english', %s)",
     ]
@@ -87,6 +97,18 @@ def search_complaints(
     if product:
         where_clauses.append("product ILIKE %s")
         filter_values.append(f"%{product.strip()}%")
+
+    if company:
+        where_clauses.append("company ILIKE %s")
+        filter_values.append(f"%{company.strip()}%")
+
+    if date_from:
+        where_clauses.append("date_received >= %s")
+        filter_values.append(date_from)
+
+    if date_to:
+        where_clauses.append("date_received <= %s")
+        filter_values.append(date_to)
 
     where_sql = " AND ".join(where_clauses)
 
@@ -124,8 +146,8 @@ def search_complaints(
         results = [
             {
                 "complaint_id": complaint_id,
-                "company": company,
-                "product": complaint_product,
+                "company": result_company,
+                "product": result_product,
                 "state": complaint_state,
                 "date_received": (
                     date_received.isoformat() if date_received else None
@@ -135,8 +157,8 @@ def search_complaints(
             }
             for (
                 complaint_id,
-                company,
-                complaint_product,
+                result_company,
+                result_product,
                 complaint_state,
                 date_received,
                 excerpt,
@@ -148,6 +170,9 @@ def search_complaints(
             "query": query,
             "state": state.strip().upper() if state else None,
             "product": product.strip() if product else None,
+            "company": company.strip() if company else None,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
             "result_count": len(results),
             "results": results,
         }

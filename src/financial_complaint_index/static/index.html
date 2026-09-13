@@ -15,9 +15,7 @@
       --background: #f4f7fb;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -35,7 +33,7 @@
     }
 
     .container {
-      width: min(980px, calc(100% - 40px));
+      width: min(1040px, calc(100% - 40px));
       margin: 0 auto;
     }
 
@@ -45,9 +43,7 @@
       letter-spacing: -0.6px;
     }
 
-    .brand span {
-      color: var(--blue);
-    }
+    .brand span { color: var(--blue); }
 
     main {
       min-height: calc(100vh - 145px);
@@ -88,29 +84,27 @@
 
     form {
       display: grid;
-      grid-template-columns: 1fr 130px 180px 110px auto;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
     }
 
-    input,
-    select,
-    button {
-      min-height: 50px;
-      border-radius: 11px;
+    .query-field { grid-column: span 2; }
+
+    input, select, button {
+      min-height: 48px;
+      border-radius: 10px;
       font: inherit;
     }
 
-    input,
-    select {
+    input, select {
       width: 100%;
-      padding: 0 14px;
+      padding: 0 13px;
       color: var(--ink);
       border: 1px solid #b9cbe2;
       background: #ffffff;
     }
 
-    input:focus,
-    select:focus {
+    input:focus, select:focus {
       outline: 3px solid #dbeafe;
       border-color: var(--blue);
     }
@@ -124,29 +118,17 @@
       cursor: pointer;
     }
 
-    button:hover {
-      background: var(--blue-dark);
-    }
+    button:hover { background: var(--blue-dark); }
+    button:disabled { cursor: wait; opacity: 0.7; }
 
-    button:disabled {
-      cursor: wait;
-      opacity: 0.7;
-    }
-
-    .helper,
-    .summary {
+    .helper, .summary {
       margin: 15px 2px 0;
       color: var(--muted);
       font-size: 14px;
     }
 
-    .summary {
-      display: none;
-    }
-
-    .summary.visible {
-      display: block;
-    }
+    .summary { display: none; }
+    .summary.visible { display: block; }
 
     #results {
       display: grid;
@@ -225,18 +207,10 @@
       font-size: 14px;
     }
 
-    @media (max-width: 850px) {
-      form {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      input {
-        grid-column: 1 / -1;
-      }
-
-      button {
-        grid-column: 1 / -1;
-      }
+    @media (max-width: 760px) {
+      form { grid-template-columns: 1fr 1fr; }
+      .query-field { grid-column: 1 / -1; }
+      button { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -259,9 +233,10 @@
       <section class="search-panel">
         <form id="search-form">
           <input
+            class="query-field"
             id="query"
             type="search"
-            placeholder="Try: identity theft"
+            placeholder="Search complaint narratives"
             aria-label="Search complaint narratives"
             required
           >
@@ -336,6 +311,10 @@
             <option value="Consumer Loan">Consumer Loan</option>
           </select>
 
+          <input id="company" type="search" placeholder="Company (optional)">
+          <input id="date-from" type="date" aria-label="Start date">
+          <input id="date-to" type="date" aria-label="End date">
+
           <select id="limit" aria-label="Number of results">
             <option value="5">5 results</option>
             <option value="10">10 results</option>
@@ -346,7 +325,7 @@
         </form>
 
         <p class="helper">
-          Enter a phrase and optionally filter results by state or product.
+          Filter ranked narratives by state, product, company, or date range.
         </p>
         <p id="summary" class="summary" aria-live="polite"></p>
       </section>
@@ -366,6 +345,9 @@
     const queryInput = document.getElementById("query");
     const stateSelect = document.getElementById("state");
     const productSelect = document.getElementById("product");
+    const companyInput = document.getElementById("company");
+    const dateFromInput = document.getElementById("date-from");
+    const dateToInput = document.getElementById("date-to");
     const limitSelect = document.getElementById("limit");
     const searchButton = document.getElementById("search-button");
     const resultsElement = document.getElementById("results");
@@ -417,6 +399,9 @@
       const query = queryInput.value.trim();
       const state = stateSelect.value;
       const product = productSelect.value;
+      const company = companyInput.value.trim();
+      const dateFrom = dateFromInput.value;
+      const dateTo = dateToInput.value;
       const limit = limitSelect.value;
 
       if (!query) {
@@ -424,15 +409,18 @@
         return;
       }
 
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        showMessage("Start date cannot be after end date.", true);
+        return;
+      }
+
       const parameters = new URLSearchParams({ query, limit });
 
-      if (state) {
-        parameters.set("state", state);
-      }
-
-      if (product) {
-        parameters.set("product", product);
-      }
+      if (state) parameters.set("state", state);
+      if (product) parameters.set("product", product);
+      if (company) parameters.set("company", company);
+      if (dateFrom) parameters.set("date_from", dateFrom);
+      if (dateTo) parameters.set("date_to", dateTo);
 
       searchButton.disabled = true;
       searchButton.textContent = "Searching...";
@@ -447,7 +435,7 @@
           throw new Error(data.detail || "Search could not be completed.");
         }
 
-        const filters = [state, product].filter(Boolean);
+        const filters = [state, product, company, dateFrom, dateTo].filter(Boolean);
         const filterText = filters.length
           ? ` filtered by ${filters.join(" · ")}`
           : "";

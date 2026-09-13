@@ -74,3 +74,32 @@ def test_search_endpoint_filters_by_product():
         "credit reporting" in result["product"].lower()
         for result in data["results"]
     )
+
+
+def test_search_endpoint_filters_by_company_and_date():
+    response = client.get(
+        "/search",
+        params={
+            "query": "identity theft",
+            "company": "Transunion",
+            "date_from": "2026-07-13",
+            "date_to": "2026-07-13",
+            "limit": 5,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["company"] == "Transunion"
+    assert data["date_from"] == "2026-07-13"
+    assert data["date_to"] == "2026-07-13"
+    assert len(data["results"]) > 0
+    assert all(
+        "transunion" in result["company"].lower()
+        for result in data["results"]
+    )
+    assert all(
+        result["date_received"] == "2026-07-13"
+        for result in data["results"]
+    )
