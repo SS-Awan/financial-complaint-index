@@ -4,6 +4,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -122,3 +123,8 @@ def search(query: str, limit: int = 5):
             status_code=503,
             detail="Database query failed.",
         ) from error
+
+@app.get("/app", include_in_schema=False)
+def web_app():
+    app_file = Path(__file__).resolve().parent / "static" / "index.html"
+    return FileResponse(app_file)
