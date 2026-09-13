@@ -35,7 +35,7 @@
     }
 
     .container {
-      width: min(900px, calc(100% - 40px));
+      width: min(980px, calc(100% - 40px));
       margin: 0 auto;
     }
 
@@ -88,7 +88,7 @@
 
     form {
       display: grid;
-      grid-template-columns: 1fr 130px 125px auto;
+      grid-template-columns: 1fr 130px 180px 110px auto;
       gap: 12px;
     }
 
@@ -225,11 +225,7 @@
       font-size: 14px;
     }
 
-    @media (max-width: 760px) {
-      main {
-        padding-top: 52px;
-      }
-
+    @media (max-width: 850px) {
       form {
         grid-template-columns: 1fr 1fr;
       }
@@ -325,6 +321,21 @@
             <option value="WY">Wyoming</option>
           </select>
 
+          <select id="product" aria-label="Filter by product">
+            <option value="">All products</option>
+            <option value="Credit reporting">Credit reporting</option>
+            <option value="Debt collection">Debt collection</option>
+            <option value="Checking or savings">Checking or savings</option>
+            <option value="Credit card">Credit card</option>
+            <option value="Mortgage">Mortgage</option>
+            <option value="Vehicle loan">Vehicle loan</option>
+            <option value="Student loan">Student loan</option>
+            <option value="Money transfer">Money transfer</option>
+            <option value="Payday loan">Payday loan</option>
+            <option value="Prepaid card">Prepaid card</option>
+            <option value="Consumer Loan">Consumer Loan</option>
+          </select>
+
           <select id="limit" aria-label="Number of results">
             <option value="5">5 results</option>
             <option value="10">10 results</option>
@@ -334,7 +345,9 @@
           <button id="search-button" type="submit">Search</button>
         </form>
 
-        <p class="helper">Enter a phrase and optionally filter results by state.</p>
+        <p class="helper">
+          Enter a phrase and optionally filter results by state or product.
+        </p>
         <p id="summary" class="summary" aria-live="polite"></p>
       </section>
 
@@ -352,6 +365,7 @@
     const form = document.getElementById("search-form");
     const queryInput = document.getElementById("query");
     const stateSelect = document.getElementById("state");
+    const productSelect = document.getElementById("product");
     const limitSelect = document.getElementById("limit");
     const searchButton = document.getElementById("search-button");
     const resultsElement = document.getElementById("results");
@@ -402,6 +416,7 @@
 
       const query = queryInput.value.trim();
       const state = stateSelect.value;
+      const product = productSelect.value;
       const limit = limitSelect.value;
 
       if (!query) {
@@ -413,6 +428,10 @@
 
       if (state) {
         parameters.set("state", state);
+      }
+
+      if (product) {
+        parameters.set("product", product);
       }
 
       searchButton.disabled = true;
@@ -428,9 +447,13 @@
           throw new Error(data.detail || "Search could not be completed.");
         }
 
-        const stateText = state ? ` in ${state}` : "";
+        const filters = [state, product].filter(Boolean);
+        const filterText = filters.length
+          ? ` filtered by ${filters.join(" · ")}`
+          : "";
+
         summaryElement.textContent =
-          `${data.result_count} result(s) for "${query}"${stateText}.`;
+          `${data.result_count} result(s) for "${query}"${filterText}.`;
         summaryElement.classList.add("visible");
 
         if (data.results.length === 0) {

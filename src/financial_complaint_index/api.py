@@ -59,6 +59,7 @@ def search_complaints(
     query: str,
     limit: int = 5,
     state: str | None = None,
+    product: str | None = None,
 ):
     query = query.strip()
 
@@ -82,6 +83,10 @@ def search_complaints(
     if state:
         where_clauses.append("state = %s")
         filter_values.append(state.strip().upper())
+
+    if product:
+        where_clauses.append("product ILIKE %s")
+        filter_values.append(f"%{product.strip()}%")
 
     where_sql = " AND ".join(where_clauses)
 
@@ -120,7 +125,7 @@ def search_complaints(
             {
                 "complaint_id": complaint_id,
                 "company": company,
-                "product": product,
+                "product": complaint_product,
                 "state": complaint_state,
                 "date_received": (
                     date_received.isoformat() if date_received else None
@@ -131,7 +136,7 @@ def search_complaints(
             for (
                 complaint_id,
                 company,
-                product,
+                complaint_product,
                 complaint_state,
                 date_received,
                 excerpt,
@@ -142,6 +147,7 @@ def search_complaints(
         return {
             "query": query,
             "state": state.strip().upper() if state else None,
+            "product": product.strip() if product else None,
             "result_count": len(results),
             "results": results,
         }

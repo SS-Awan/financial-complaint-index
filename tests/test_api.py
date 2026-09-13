@@ -35,6 +35,8 @@ def test_search_endpoint_returns_ranked_results():
     assert 1 <= len(data["results"]) <= 5
     assert "complaint_id" in data["results"][0]
     assert "rank" in data["results"][0]
+
+
 def test_search_endpoint_filters_by_state():
     response = client.get(
         "/search",
@@ -51,3 +53,24 @@ def test_search_endpoint_filters_by_state():
     assert data["state"] == "FL"
     assert len(data["results"]) > 0
     assert all(result["state"] == "FL" for result in data["results"])
+
+
+def test_search_endpoint_filters_by_product():
+    response = client.get(
+        "/search",
+        params={
+            "query": "identity theft",
+            "product": "Credit reporting",
+            "limit": 5,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["product"] == "Credit reporting"
+    assert len(data["results"]) > 0
+    assert all(
+        "credit reporting" in result["product"].lower()
+        for result in data["results"]
+    )
